@@ -1,0 +1,11 @@
+Threat,Likelihood,Impact,Severity
+SQL Injection,High,High,Medium
+Cross-Site Scripting,High,High,Medium
+DDoS Attack,High,High,Medium
+Insider Threat,High,High,Medium
+Privilege Escalation,High,High,Medium
+Phishing Attack,High,High,Medium
+Ransomware,High,High,Medium
+Zero-Day Exploit,High,High,Medium
+Social Engineering,High,High,Medium
+Brute Force Attack,High,High,Medium
