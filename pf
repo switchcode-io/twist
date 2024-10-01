@@ -1,0 +1,114 @@
+
+# Function to allow the user to select the threat list file
+def select_threat_list_file():
+    threat_file_selected = filedialog.askopenfilename(
+        title="Select Threat List File",
+        filetypes=[("CSV files", "*.csv")]
+    )
+    if threat_file_selected:
+        threat_list_file.set(threat_file_selected)
+
+# Function to generate threat matrix
+def extract_threat_data():
+    threat_file_path = threat_list_file.get()
+    if not threat_file_path:
+        messagebox.showerror("Error", "Please provide the threat list file.")
+        return
+
+    if not os.path.exists(threat_file_path):
+        messagebox.showerror("Error", "Invalid threat list file path.")
+        return
+
+    # Read threat list file
+    try:
+        with open(threat_file_path, newline='') as threat_file:
+            threat_reader = csv.DictReader(threat_file)
+            threat_data = [row for row in threat_reader]
+    except Exception as e:
+        messagebox.showerror("Error", f"Error reading Threat List file: {e}")
+        return
+
+    folder = folder_path.get()
+    threat_matrix = []
+
+    # Process each CSV file in the selected folder
+    for file in os.listdir(folder):
+        if file.endswith(".csv"):
+            filepath = os.path.join(folder, file)
+            with open(filepath, newline='') as csvfile:
+                reader = csv.DictReader(csvfile)
+                fieldnames = reader.fieldnames
+                
+                # Check if "Risk Factors" column exists
+                if 'Risk Factors' not in fieldnames:
+                    continue
+
+                for row in reader:
+                    risk_factors = row['Risk Factors'].split(',')  # Assuming risk factors are comma-separated
+                    
+                    # Check each threat in the threat list
+                    for threat in threat_data:
+                        if threat['Threat'] in risk_factors:
+                            threat_matrix.append({
+                                'Threat': threat['Threat'],
+                                'Likelihood': threat['Likelihood'],
+                                'Impact': threat['Impact'],
+                                'Severity': threat['Severity'],
+                                'File': file,
+                                'Detected Risk Factor': threat['Threat']
+                            })
+
+    if not threat_matrix:
+        messagebox.showinfo("Info", "No threats found in the CSV files.")
+        return
+
+    # Generate a timestamped filename for the threat matrix
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    output_filename = f"threat_matrix_{timestamp}.csv"
+    output_filepath = os.path.join(folder, output_filename)
+
+    # Write the threat matrix to a new CSV file
+    with open(output_filepath, mode='w', newline='') as output_file:
+        fieldnames = ['Threat', 'Likelihood', 'Impact', 'Severity', 'File', 'Detected Risk Factor']
+        writer = csv.DictWriter(output_file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(threat_matrix)
+
+    messagebox.showinfo("Success", f"Threat matrix extracted and saved to {output_filename}")
+
+# Initialize tkinter app
+root = tk.Tk()
+root.title("Vulnerability Manager")
+
+# Folder path input
+folder_path = tk.StringVar()
+tk.Label(root, text="Selected Folder:").grid(row=0, column=0, padx=10, pady=5)
+tk.Entry(root, textvariable=folder_path, width=50).grid(row=0, column=1, padx=10, pady=5)
+tk.Button(root, text="Browse Folder", command=select_folder).grid(row=0, column=2, padx=10, pady=5)
+
+# List of files
+tk.Label(root, text="Found Files:").grid(row=1, column=0, padx=10, pady=5)
+files_list = tk.Listbox(root, width=60, height=10)
+files_list.grid(row=1, column=1, padx=10, pady=5)
+files_list.bind("<Double-1>", lambda event: open_with_excel(os.path.join(folder_path.get(), files_list.get(files_list.curselection()))))
+
+# POAM List File input with a "Browse" button
+poam_list_file = tk.StringVar()  # Variable to store the selected POAM file path
+tk.Label(root, text="POAM List File:").grid(row=2, column=0, padx=10, pady=5)
+tk.Entry(root, textvariable=poam_list_file, width=50).grid(row=2, column=1, padx=10, pady=5)
+tk.Button(root, text="Browse POAM File", command=select_poam_file).grid(row=2, column=2, padx=10, pady=5)
+
+# Threat List File input with a "Browse" button
+threat_list_file = tk.StringVar()  # Variable to store the selected Threat List file path
+tk.Label(root, text="Threat List File:").grid(row=3, column=0, padx=10, pady=5)
+tk.Entry(root, textvariable=threat_list_file, width=50).grid(row=3, column=1, padx=10, pady=5)
+tk.Button(root, text="Browse Threat List File", command=select_threat_list_file).grid(row=3, column=2, padx=10, pady=5)
+
+# Buttons for POAM Filter, Extract Metrics, and Extract Threat Data
+tk.Button(root, text="Filter POAM ID", command=apply_poam_filter).grid(row=4, column=1, padx=10, pady=5, sticky='w')
+tk.Button(root, text="Extract Metrics", command=extract_metrics).grid(row=4, column=1, padx=10, pady=5, sticky='e')
+tk.Button(root, text="Extract Threat Data", command=extract_threat_data).grid(row=4, column=2, padx=10, pady=5, sticky='e')
+
+# Start the tkinter main loop
+root.mainloop()
+
