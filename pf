@@ -1,80 +1,145 @@
+import tkinter as tk
+from tkinter import filedialog, messagebox
+import os
+import csv
+from datetime import datetime
+import subprocess  # This is required for opening files with Excel
 
-# Function to allow the user to select the threat list file
-def select_threat_list_file():
-    threat_file_selected = filedialog.askopenfilename(
-        title="Select Threat List File",
+# Function to open CSV file with Excel
+def open_with_excel(filepath):
+    try:
+        os.system(f'start excel {filepath}') 
+    except Exception as e:
+        messagebox.showerror("Error", f"Unable to open Excel: {e}")
+
+# Function to browse folder and load CSV files
+def select_folder():
+    folder_selected = filedialog.askdirectory()
+    if folder_selected:
+        folder_path.set(folder_selected)
+        load_files(folder_selected)
+
+# Function to load CSV files from the selected folder into the listbox
+def load_files(folder):
+    files_list.delete(0, tk.END)
+    for file in os.listdir(folder):
+        if file.endswith(".csv"):
+            files_list.insert(tk.END, file)
+
+# Function to allow the user to select the POAM file
+def select_poam_file():
+    poam_file_selected = filedialog.askopenfilename(
+        title="Select POAM List File", 
         filetypes=[("CSV files", "*.csv")]
     )
-    if threat_file_selected:
-        threat_list_file.set(threat_file_selected)
+    if poam_file_selected:
+        poam_list_file.set(poam_file_selected)
 
-# Function to generate threat matrix
-def extract_threat_data():
-    threat_file_path = threat_list_file.get()
-    if not threat_file_path:
-        messagebox.showerror("Error", "Please provide the threat list file.")
+# Function to apply POAM filter to each CSV file
+def apply_poam_filter():
+    poam_file_path = poam_list_file.get()
+    if not poam_file_path:
+        messagebox.showerror("Error", "Please provide the POAM list file.")
         return
 
-    if not os.path.exists(threat_file_path):
-        messagebox.showerror("Error", "Invalid threat list file path.")
+    if not os.path.exists(poam_file_path):
+        messagebox.showerror("Error", "Invalid POAM list file path.")
         return
 
-    # Read threat list file
+    # Read POAM file and store the CVE-POAM_ID mapping
     try:
-        with open(threat_file_path, newline='') as threat_file:
-            threat_reader = csv.DictReader(threat_file)
-            threat_data = [row for row in threat_reader]
+        with open(poam_file_path, newline='') as poam_file:
+            poam_reader = csv.DictReader(poam_file)
+            if 'CVE' not in poam_reader.fieldnames or 'POAM_ID' not in poam_reader.fieldnames:
+                messagebox.showerror("Error", "POAM list file must contain 'CVE' and 'POAM_ID' columns.")
+                return
+            poam_data = {row['CVE']: row['POAM_ID'] for row in poam_reader}
     except Exception as e:
-        messagebox.showerror("Error", f"Error reading Threat List file: {e}")
+        messagebox.showerror("Error", f"Error reading POAM file: {e}")
         return
 
     folder = folder_path.get()
-    threat_matrix = []
 
-    # Process each CSV file in the selected folder
+    # Iterate through all CSV files in the selected folder
+    for file in os.listdir(folder):
+        if file.endswith(".csv"):
+            filepath = os.path.join(folder, file)
+            process_csv_for_poam(filepath, poam_data)
+
+    messagebox.showinfo("Success", "POAM Filter applied to all files.")
+
+# Helper function to process each CSV file for POAM filtering
+def process_csv_for_poam(filepath, poam_data):
+    updated_rows = []
+    file_modified = False
+
+    # Read and append POAM_ID if CVE exists in POAM file
+    with open(filepath, newline='') as csvfile:
+        reader = csv.DictReader(csvfile)
+        fieldnames = reader.fieldnames
+
+        # Add POAM_ID field if not already present
+        if 'POAM_ID' not in fieldnames:
+            fieldnames.append('POAM_ID')
+            file_modified = True
+
+        for row in reader:
+            cve = row.get('CVE')
+            if cve in poam_data and row.get('POAM_ID') != poam_data[cve]:
+                row['POAM_ID'] = poam_data[cve]
+                file_modified = True
+            updated_rows.append(row)
+
+    # If the file was modified, write the updated data back to the file
+    if file_modified:
+        with open(filepath, mode='w', newline='') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(updated_rows)
+
+# Function to extract metrics and generate a timestamped file
+def extract_metrics():
+    folder = folder_path.get()
+    consolidated_rows = []
+    output_fieldnames = ['Environment', 'CVE', 'Severity', 'Type', 'Package', 'Published', 'Fix Date', 'Discovered', 'Compliance Date', 'Days Overdue']
+
+    # Process each CSV file in the folder and consolidate data
     for file in os.listdir(folder):
         if file.endswith(".csv"):
             filepath = os.path.join(folder, file)
             with open(filepath, newline='') as csvfile:
                 reader = csv.DictReader(csvfile)
-                fieldnames = reader.fieldnames
-                
-                # Check if "Risk Factors" column exists
-                if 'Risk Factors' not in fieldnames:
-                    continue
-
                 for row in reader:
-                    risk_factors = row['Risk Factors'].split(',')  # Assuming risk factors are comma-separated
-                    
-                    # Check each threat in the threat list
-                    for threat in threat_data:
-                        if threat['Threat'] in risk_factors:
-                            threat_matrix.append({
-                                'Threat': threat['Threat'],
-                                'Likelihood': threat['Likelihood'],
-                                'Impact': threat['Impact'],
-                                'Severity': threat['Severity'],
-                                'File': file,
-                                'Detected Risk Factor': threat['Threat']
-                            })
+                    if all(field in row for field in output_fieldnames):  # Ensure all required fields are present
+                        consolidated_rows.append({
+                            'Environment': row['Environment'],
+                            'CVE': row['CVE'],
+                            'Severity': row['Severity'],
+                            'Type': row['Type'],
+                            'Package': row['Package'],
+                            'Published': row['Published'],
+                            'Fix Date': row['Fix Date'],
+                            'Discovered': row['Discovered'],
+                            'Compliance Date': row['Compliance Date'],
+                            'Days Overdue': row['Days Overdue']
+                        })
 
-    if not threat_matrix:
-        messagebox.showinfo("Info", "No threats found in the CSV files.")
+    if not consolidated_rows:
+        messagebox.showinfo("Info", "No valid data to consolidate.")
         return
 
-    # Generate a timestamped filename for the threat matrix
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    output_filename = f"threat_matrix_{timestamp}.csv"
+    # Generate a timestamped filename
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_filename = f"Consolidated_Metrics_{timestamp}.csv"
     output_filepath = os.path.join(folder, output_filename)
 
-    # Write the threat matrix to a new CSV file
+    # Write the consolidated data to a new CSV file
     with open(output_filepath, mode='w', newline='') as output_file:
-        fieldnames = ['Threat', 'Likelihood', 'Impact', 'Severity', 'File', 'Detected Risk Factor']
-        writer = csv.DictWriter(output_file, fieldnames=fieldnames)
+        writer = csv.DictWriter(output_file, fieldnames=output_fieldnames)
         writer.writeheader()
-        writer.writerows(threat_matrix)
+        writer.writerows(consolidated_rows)
 
-    messagebox.showinfo("Success", f"Threat matrix extracted and saved to {output_filename}")
+    messagebox.showinfo("Success", f"Metrics extracted and saved to {output_filename}")
 
 # Initialize tkinter app
 root = tk.Tk()
@@ -98,17 +163,9 @@ tk.Label(root, text="POAM List File:").grid(row=2, column=0, padx=10, pady=5)
 tk.Entry(root, textvariable=poam_list_file, width=50).grid(row=2, column=1, padx=10, pady=5)
 tk.Button(root, text="Browse POAM File", command=select_poam_file).grid(row=2, column=2, padx=10, pady=5)
 
-# Threat List File input with a "Browse" button
-threat_list_file = tk.StringVar()  # Variable to store the selected Threat List file path
-tk.Label(root, text="Threat List File:").grid(row=3, column=0, padx=10, pady=5)
-tk.Entry(root, textvariable=threat_list_file, width=50).grid(row=3, column=1, padx=10, pady=5)
-tk.Button(root, text="Browse Threat List File", command=select_threat_list_file).grid(row=3, column=2, padx=10, pady=5)
-
-# Buttons for POAM Filter, Extract Metrics, and Extract Threat Data
-tk.Button(root, text="Filter POAM ID", command=apply_poam_filter).grid(row=4, column=1, padx=10, pady=5, sticky='w')
-tk.Button(root, text="Extract Metrics", command=extract_metrics).grid(row=4, column=1, padx=10, pady=5, sticky='e')
-tk.Button(root, text="Extract Threat Data", command=extract_threat_data).grid(row=4, column=2, padx=10, pady=5, sticky='e')
+# Buttons for POAM Filter and Extract Metrics
+tk.Button(root, text="Filter POAM ID", command=apply_poam_filter).grid(row=3, column=1, padx=10, pady=5, sticky='w')
+tk.Button(root, text="Extract Metrics", command=extract_metrics).grid(row=3, column=1, padx=10, pady=5, sticky='e')
 
 # Start the tkinter main loop
 root.mainloop()
-
