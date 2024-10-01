@@ -1,0 +1,148 @@
+# CVSS v2.0 Base Score Calculation
+
+def calculate_cvss_base_score(
+        confidentiality_impact, integrity_impact, availability_impact,
+        access_vector, access_complexity, authentication):
+
+    # Impact calculation
+    impact = 10.41 * (1 - (1 - confidentiality_impact) * (1 - integrity_impact) * (1 - availability_impact))
+
+    # Exploitability calculation
+    exploitability = 20 * access_complexity * authentication * access_vector
+
+    # Function of impact: f(Impact)
+    f_impact = 0 if impact == 0 else 1.176
+
+    # Base Score calculation
+    base_score = (0.6 * impact + 0.4 * exploitability - 1.5) * f_impact
+
+    return round(base_score, 1)
+
+
+# CVSS v2.0 Temporal Score Calculation
+def calculate_cvss_temporal_score(base_score, exploitability, remediation_level, report_confidence):
+    temporal_score = base_score * exploitability * remediation_level * report_confidence
+    return round(temporal_score, 1)
+
+
+# CVSS v2.0 Environmental Score Calculation
+def calculate_cvss_environmental_score(adjusted_temporal, collateral_damage_potential, target_distribution):
+    environmental_score = (adjusted_temporal + (10 - adjusted_temporal) * collateral_damage_potential) * target_distribution
+    return round(environmental_score, 1)
+
+
+# Helper functions to map input values to the correct numerical values
+def map_access_complexity(ac):
+    return {
+        'high': 0.35,
+        'medium': 0.61,
+        'low': 0.71
+    }.get(ac.lower(), 0.71)
+
+
+def map_authentication(auth):
+    return {
+        'none': 0.704,
+        'single': 0.56,
+        'multiple': 0.45
+    }.get(auth.lower(), 0.704)
+
+
+def map_access_vector(av):
+    return {
+        'local': 0.395,
+        'adjacent network': 0.646,
+        'network': 1
+    }.get(av.lower(), 1)
+
+
+def map_impact(value):
+    return {
+        'none': 0,
+        'partial': 0.275,
+        'complete': 0.660
+    }.get(value.lower(), 0)
+
+
+def map_exploitability(exploitability):
+    return {
+        'unproven': 0.85,
+        'proof-of-concept': 0.9,
+        'functional': 0.95,
+        'high': 1.0,
+        'not defined': 1.0
+    }.get(exploitability.lower(), 1.0)
+
+
+def map_remediation_level(remediation_level):
+    return {
+        'official-fix': 0.87,
+        'temporary-fix': 0.9,
+        'workaround': 0.95,
+        'unavailable': 1.0,
+        'not defined': 1.0
+    }.get(remediation_level.lower(), 1.0)
+
+
+def map_report_confidence(report_confidence):
+    return {
+        'unconfirmed': 0.90,
+        'uncorroborated': 0.95,
+        'confirmed': 1.00,
+        'not defined': 1.00
+    }.get(report_confidence.lower(), 1.0)
+
+
+def map_collateral_damage_potential(cdp):
+    return {
+        'none': 0,
+        'low': 0.1,
+        'low-medium': 0.3,
+        'medium-high': 0.4,
+        'high': 0.5,
+        'not defined': 0
+    }.get(cdp.lower(), 0)
+
+
+def map_target_distribution(td):
+    return {
+        'none': 0,
+        'low': 0.25,
+        'medium': 0.75,
+        'high': 1.0,
+        'not defined': 1.0
+    }.get(td.lower(), 1.0)
+
+
+# Sample Data: Base Score Calculation
+
+confidentiality_impact = map_impact('complete')
+integrity_impact = map_impact('complete')
+availability_impact = map_impact('complete')
+access_vector = map_access_vector('network')
+access_complexity = map_access_complexity('low')
+authentication = map_authentication('none')
+
+# Calculate Base Score
+base_score = calculate_cvss_base_score(confidentiality_impact, integrity_impact, availability_impact, access_vector, access_complexity, authentication)
+print(f"CVSS Base Score: {base_score}")
+
+# Sample Data: Temporal Score Calculation
+
+exploitability = map_exploitability('functional')
+remediation_level = map_remediation_level('workaround')
+report_confidence = map_report_confidence('confirmed')
+
+# Calculate Temporal Score
+temporal_score = calculate_cvss_temporal_score(base_score, exploitability, remediation_level, report_confidence)
+print(f"CVSS Temporal Score: {temporal_score}")
+
+# Sample Data: Environmental Score Calculation
+
+adjusted_temporal = temporal_score  # In practice, recalculate adjusted temporal if necessary
+collateral_damage_potential = map_collateral_damage_potential('low')
+target_distribution = map_target_distribution('medium')
+
+# Calculate Environmental Score
+environmental_score = calculate_cvss_environmental_score(adjusted_temporal, collateral_damage_potential, target_distribution)
+print(f"CVSS Environmental Score: {environmental_score}")
