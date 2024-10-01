@@ -95,3 +95,6 @@ select_button.pack(pady=20)
 
 # Running the Tkinter main loop
 root.mainloop()
+
+#CVE ID,CVSS Score,Severity,Asset Name/ID,Asset Criticality,Attack Vector,Exploit Available (Y/N),Potential Impact,Business Impact,Patch Available (Y/N),Patch Status (Applied/Not Applied),Mitigating Controls,Detection Mechanism,Date Discovered,Date Last Exploited,Business Risk,Compliance Impact,MITRE ATT&CK Tactic,Comments
+,,,,,,,,,,,,,,,,,,
