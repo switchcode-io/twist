@@ -1,4 +1,4 @@
-import http.client
+import httplib
 import json
 import ssl
 import os
@@ -8,17 +8,17 @@ console_url = "<your-twistlock-console-url>"  # Example: twistlock.company.com (
 api_token = "<your-api-token>"
 output_directory = "./twistlock_scans"
 
-# Set up SSL context to allow HTTPS requests
-context = ssl.create_default_context()
+# Create SSL context for secure connection
+context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
 
 def get_vulnerability_scan_results():
     """
     Fetch the vulnerability scan results from Prisma Cloud Compute.
     """
-    conn = http.client.HTTPSConnection(console_url, context=context)
+    conn = httplib.HTTPSConnection(console_url, context=context)
     
     headers = {
-        "Authorization": f"Bearer {api_token}",
+        "Authorization": "Bearer {}".format(api_token),
         "Content-Type": "application/json"
     }
 
@@ -26,13 +26,13 @@ def get_vulnerability_scan_results():
         conn.request("GET", "/api/v1/vulnerabilities/scans", headers=headers)
         response = conn.getresponse()
         if response.status != 200:
-            print(f"Error: {response.status} {response.reason}")
+            print("Error: {} {}".format(response.status, response.reason))
             return None
         
-        data = response.read().decode("utf-8")
+        data = response.read()
         return json.loads(data)
     except Exception as e:
-        print(f"Error fetching scan results: {e}")
+        print("Error fetching scan results: {}".format(e))
         return None
     finally:
         conn.close()
@@ -41,15 +41,17 @@ def save_scan_results_to_file(scan_data, filename="vulnerability_scan_results.js
     """
     Save scan results to a JSON file.
     """
-    os.makedirs(output_directory, exist_ok=True)
+    if not os.path.exists(output_directory):
+        os.makedirs(output_directory)
+
     file_path = os.path.join(output_directory, filename)
 
     try:
         with open(file_path, 'w') as f:
             json.dump(scan_data, f, indent=4)
-        print(f"Scan results saved to {file_path}")
+        print("Scan results saved to {}".format(file_path))
     except Exception as e:
-        print(f"Error saving scan results to file: {e}")
+        print("Error saving scan results to file: {}".format(e))
 
 def main():
     print("Fetching vulnerability scan results from Twistlock...")
