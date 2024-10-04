@@ -1,0 +1,65 @@
+import http.client
+import json
+import ssl
+import os
+
+# Configuration - replace with your Prisma Cloud Compute Console URL and API token
+console_url = "<your-twistlock-console-url>"  # Example: twistlock.company.com (without https://)
+api_token = "<your-api-token>"
+output_directory = "./twistlock_scans"
+
+# Set up SSL context to allow HTTPS requests
+context = ssl.create_default_context()
+
+def get_vulnerability_scan_results():
+    """
+    Fetch the vulnerability scan results from Prisma Cloud Compute.
+    """
+    conn = http.client.HTTPSConnection(console_url, context=context)
+    
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        conn.request("GET", "/api/v1/vulnerabilities/scans", headers=headers)
+        response = conn.getresponse()
+        if response.status != 200:
+            print(f"Error: {response.status} {response.reason}")
+            return None
+        
+        data = response.read().decode("utf-8")
+        return json.loads(data)
+    except Exception as e:
+        print(f"Error fetching scan results: {e}")
+        return None
+    finally:
+        conn.close()
+
+def save_scan_results_to_file(scan_data, filename="vulnerability_scan_results.json"):
+    """
+    Save scan results to a JSON file.
+    """
+    os.makedirs(output_directory, exist_ok=True)
+    file_path = os.path.join(output_directory, filename)
+
+    try:
+        with open(file_path, 'w') as f:
+            json.dump(scan_data, f, indent=4)
+        print(f"Scan results saved to {file_path}")
+    except Exception as e:
+        print(f"Error saving scan results to file: {e}")
+
+def main():
+    print("Fetching vulnerability scan results from Twistlock...")
+    scan_results = get_vulnerability_scan_results()
+    
+    if scan_results:
+        print("Successfully retrieved scan results.")
+        save_scan_results_to_file(scan_results)
+    else:
+        print("Failed to retrieve scan results.")
+
+if __name__ == "__main__":
+    main()
