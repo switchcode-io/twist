@@ -1,37 +1,56 @@
 import boto3
 import time
 import logging
+import csv
 
-# Define the path of the file you want to delete
-FILE_PATH = "/path/to/your/file"
-LOG_FILE = "delete_file_results.log"
+# Define the CSV file path and the log file
+CSV_FILE = "workspaces_list.csv"
+LOG_FILE = "remove_nessus_agent_results.log"
 
 # Configure logging
 logging.basicConfig(filename=LOG_FILE, level=logging.INFO, 
                     format="%(asctime)s - %(message)s")
 
-# Initialize SSM and WorkSpaces clients
+# Initialize SSM client
 ssm_client = boto3.client('ssm')
-workspaces_client = boto3.client('workspaces')
 
-def get_all_workspace_instances():
+def load_workspace_instances_from_csv(csv_file):
     """
-    Retrieves all WorkSpace instances in the environment.
+    Reads the WorkSpace instance IDs and OS types from the provided CSV file.
+    Returns a list of dictionaries with 'InstanceId' and 'OperatingSystem' keys.
     """
-    instance_ids = []
-    paginator = workspaces_client.get_paginator('describe_workspaces')
-    for page in paginator.paginate():
-        for workspace in page['Workspaces']:
-            instance_ids.append(workspace['WorkspaceId'])
-    return instance_ids
+    instances = []
+    try:
+        with open(csv_file, mode='r') as file:
+            csv_reader = csv.DictReader(file)
+            for row in csv_reader:
+                instances.append({
+                    'InstanceId': row['InstanceId'],
+                    'OperatingSystem': row['OperatingSystem']
+                })
+    except FileNotFoundError:
+        print(f"Error: CSV file '{csv_file}' not found.")
+        return []
+    except KeyError:
+        print("Error: CSV file must contain 'InstanceId' and 'OperatingSystem' columns.")
+        return []
+    
+    return instances
 
-def delete_file_on_workspace(instance_id):
+def remove_nessus_agent_on_workspace(instance_id, platform_type):
     """
-    Uses SSM to sudo to `su`, checks for the file, and deletes it if found.
+    Uses SSM to remove the Nessus Agent based on the OS type of the WorkSpace.
     Logs the result for each WorkSpace.
     """
-    command = f'sudo su -c "if [ -f {FILE_PATH} ]; then rm -f {FILE_PATH}; echo Deleted; else echo Not found; fi"'
-    
+    if platform_type == "Windows":
+        # Command to remove Nessus Agent on Windows
+        command = r'"C:\Program Files\Tenable\Nessus Agent\nessuscli.exe" agent unlink && ' \
+                  r'rmdir /S /Q "C:\ProgramData\Tenable\Nessus Agent"'
+    elif platform_type == "Linux":
+        # Command to remove Nessus Agent on Linux
+        command = 'sudo /opt/nessus_agent/sbin/nessuscli agent unlink && ' \
+                  'sudo rm -rf /opt/nessus_agent'
+
     try:
         # Run command on the WorkSpace
         response = ssm_client.send_command(
@@ -54,31 +73,35 @@ def delete_file_on_workspace(instance_id):
         # Log the outcome
         if result['Status'] == 'Success':
             output = result['StandardOutputContent'].strip()
-            logging.info(f"Workspace {instance_id}: {output}")
-            print(f"Workspace {instance_id}: {output}")
+            logging.info(f"Workspace {instance_id} ({platform_type}): {output}")
+            print(f"Workspace {instance_id} ({platform_type}): {output}")
         else:
             error_msg = result['StandardErrorContent'].strip()
-            logging.error(f"Workspace {instance_id}: Command failed - {error_msg}")
-            print(f"Workspace {instance_id}: Command failed - {error_msg}")
+            logging.error(f"Workspace {instance_id} ({platform_type}): Command failed - {error_msg}")
+            print(f"Workspace {instance_id} ({platform_type}): Command failed - {error_msg}")
     
     except Exception as e:
-        logging.error(f"Workspace {instance_id}: Error - {str(e)}")
-        print(f"Workspace {instance_id}: Error - {str(e)}")
+        logging.error(f"Workspace {instance_id} ({platform_type}): Error - {str(e)}")
+        print(f"Workspace {instance_id} ({platform_type}): Error - {str(e)}")
 
 def main():
-    # Get list of all WorkSpaces
-    instance_ids = get_all_workspace_instances()
-    if not instance_ids:
-        print("No WorkSpaces found.")
+    # Load list of WorkSpaces from CSV file
+    instances = load_workspace_instances_from_csv(CSV_FILE)
+    if not instances:
+        print("No WorkSpaces found in the CSV file.")
         return
     
-    print(f"Found {len(instance_ids)} WorkSpaces. Starting file deletion process...")
+    print(f"Found {len(instances)} WorkSpaces in CSV. Starting Nessus Agent removal process...")
     
-    # Iterate over each WorkSpace and delete the file if it exists
-    for instance_id in instance_ids:
-        delete_file_on_workspace(instance_id)
+    # Iterate over each WorkSpace and remove the Nessus Agent based on OS type
+    for instance in instances:
+        instance_id = instance['InstanceId']
+        platform_type = instance['OperatingSystem']
+        
+        # Remove Nessus Agent based on OS
+        remove_nessus_agent_on_workspace(instance_id, platform_type)
 
-    print("File deletion process completed. Check the log file for results.")
+    print("Nessus Agent removal process completed. Check the log file for results.")
 
 if __name__ == "__main__":
     main()
