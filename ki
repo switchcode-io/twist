@@ -1,0 +1,16 @@
+powershell -Command "& {
+    $files = Get-ChildItem -Path . -Filter *.csv;
+    $data = @();
+    foreach ($file in $files) {
+        $csv = Import-Csv $file.FullName;
+        $data += $csv;
+    }
+    $grouped = $data | Group-Object exported_namespace;
+    $result = $grouped | ForEach-Object {
+        [PSCustomObject]@{
+            exported_namespace = $_.Name;
+            reports = $_.Group
+        }
+    };
+    $result | ConvertTo-Csv -NoTypeInformation | Set-Content aggregated.csv
+}"
